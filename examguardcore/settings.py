@@ -37,6 +37,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Our apps
+    'admin_portal.apps.AdminPortalConfig',
+    'lecturer_portal.apps.LecturerPortalConfig',
+    'student_portal.apps.StudentPortalConfig',
+    'core_app.apps.CoreAppConfig',
 ]
 
 MIDDLEWARE = [
@@ -51,10 +57,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'examguardcore.urls'
 
+import os # Make sure 'import os' is at the top of your settings.py if not already there, though for this specific change, BASE_DIR is enough.
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'], # <-- This line has changed
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -111,10 +119,17 @@ USE_I18N = True
 USE_TZ = True
 
 
+
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Additional locations of static files
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
