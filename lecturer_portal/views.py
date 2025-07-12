@@ -3,11 +3,12 @@ from django.contrib.auth import login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 import json
+import traceback
 
 from admin_portal.models import LecturerCode
-# We will need these models later for other functions
-# from .models import Exam, Question
-# from student_portal.models import ExamAttempt, StudentAnswer
+from .models import Exam, Question, Option
+from django.db import transaction
+import re
 
 # Attempt to import libraries for Word and Excel, handle if not found
 try:
@@ -83,3 +84,179 @@ def is_lecturer_authenticated(request):
         if not request.user.is_staff and not request.user.is_superuser:
             return True
     return False
+
+@csrf_exempt
+def upload_questions_api(request):
+    if not is_lecturer_authenticated(request): # Make sure is_lecturer_authenticated is defined
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    if request.method == 'POST':
+        if not Document:
+            return JsonResponse({'error': 'MS Word parsing library (python-docx) not installed or not found.'}, status=500)
+
+        exam_id = request.POST.get('exam_id')
+        word_file = request.FILES.get('word_file')
+
+        if not exam_id:
+            return JsonResponse({'error': 'exam_id is required.'}, status=400)
+        if not word_file:
+            return JsonResponse({'error': 'Word file (word_file) is required.'}, status=400)
+
+        try:
+            exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
+        except Exam.DoesNotExist:
+            return JsonResponse({'error': 'Exam not found or you do not have permission to modify it.'}, status=404)
+
+        print("--- Starting Question Parsing ---_DEBUG_EMAIL_REMOVED_") # DEBUG START
+        try:
+            document = Document(word_file)
+            parsed_questions = 0
+            with transaction.atomic():
+                exam.questions.all().delete()
+
+                current_question_text = None
+                current_options = []
+                current_answer_letter = None
+                current_lecturer_answer_key = None
+                question_type = 'multiple_choice' # This is the general default for the parser state
+                is_next_question_essay = False # <--- ADD THIS NEW FLAG
+                is_next_question_fill_in_the_blanks = False # <--- ADD THIS NEW FLAG
+
+                for para_idx, para in enumerate(document.paragraphs):
+                    text = para.text.strip()
+                    print(f"DEBUG [{para_idx}]: Processing paragraph: '{text}'")
+
+                    if not text:
+                        continue
+
+                    q_match = re.match(r"^\d+\.\s*(?:\d+\.\s*)?(.*)", text)
+                    option_match = re.match(r"^([A-Za-z])\.\s+(.*)", text)
+                    answer_match = re.match(r"^Answer:\s*([A-Za-z])", text, re.IGNORECASE)
+
+                    # Header detection for question type switching
+                    if text.lower() == 'fill in the blanks':
+                        if current_question_text: # Save any previous question
+                            _save_parsed_question(exam, current_question_text, question_type, current_options, current_answer_letter, current_lecturer_answer_key)
+                            parsed_questions += 1
+                            # Reset state for the header itself
+                            current_question_text = None; current_options = []; current_answer_letter = None; current_lecturer_answer_key = None;
+                        print("DEBUG: Header 'Fill In The Blanks' detected.")
+                        is_next_question_fill_in_the_blanks = True
+                        is_next_question_essay = False
+                        question_type = 'fill_in_the_blanks' # Set current type expectation
+                        continue
+                    elif text.lower() == 'essay question':
+                        if current_question_text: # Save any previous question
+                            _save_parsed_question(exam, current_question_text, question_type, current_options, current_answer_letter, current_lecturer_answer_key)
+                            parsed_questions += 1
+                            current_question_text = None; current_options = []; current_answer_letter = None; current_lecturer_answer_key = None;
+                        print("DEBUG: Header 'Essay Question' detected.")
+                        is_next_question_essay = True
+                        is_next_question_fill_in_the_blanks = False
+                        question_type = 'essay' # Set current type expectation
+                        continue
+
+                    # Main parsing logic
+                    if q_match:
+                        if current_question_text: # This means a previous question was being built, save it.
+                            print(f"DEBUG: Saving previous Q (type {question_type}): '{current_question_text}'")
+                            _save_parsed_question(exam, current_question_text, question_type, current_options, current_answer_letter, current_lecturer_answer_key)
+                            parsed_questions += 1
+                        
+                        # Start new question
+                        current_question_text = q_match.group(1).strip()
+                        current_options = []
+                        current_answer_letter = None
+                        current_lecturer_answer_key = None
+
+                        if is_next_question_essay:
+                            question_type = 'essay'
+                            print(f"DEBUG: Matched QUESTION: '{current_question_text}' (type set by Essay header: {question_type})")
+                            is_next_question_essay = False # Reset flag after using it
+                        elif is_next_question_fill_in_the_blanks:
+                            question_type = 'fill_in_the_blanks'
+                            # Check for inline fill-in-the-blank keyword if needed, or just use the text
+                            if "fill in the blank:" in current_question_text.lower():
+                                 current_question_text = re.split("fill in the blank:", current_question_text, flags=re.IGNORECASE, maxsplit=1)[1].strip()
+                            print(f"DEBUG: Matched QUESTION: '{current_question_text}' (type set by FillBlanks header: {question_type})")
+                            is_next_question_fill_in_the_blanks = False # Reset flag
+                        else:
+                            # Default to MCQ if no header flag was set for it, but also check for inline essay/fill keywords
+                            essay_keyword_inline = "essay question:"
+                            fill_blank_keyword_inline = "fill in the blank:"
+                            temp_text_lower = current_question_text.lower()
+
+                            if essay_keyword_inline in temp_text_lower:
+                                question_type = 'essay'
+                                current_question_text = re.split(essay_keyword_inline, current_question_text, flags=re.IGNORECASE, maxsplit=1)[1].strip()
+                                print(f"DEBUG: Matched QUESTION: '{current_question_text}' (inline essay keyword: {question_type})")
+                            elif fill_blank_keyword_inline in temp_text_lower or "____" in current_question_text:
+                                question_type = 'fill_in_the_blanks'
+                                if fill_blank_keyword_inline in temp_text_lower:
+                                    current_question_text = re.split(fill_blank_keyword_inline, current_question_text, flags=re.IGNORECASE, maxsplit=1)[1].strip()
+                                print(f"DEBUG: Matched QUESTION: '{current_question_text}' (inline fill/blank keyword: {question_type})")
+                            else:
+                                question_type = 'multiple_choice' # True default
+                                print(f"DEBUG: Matched QUESTION: '{current_question_text}' (defaulting to MCQ type: {question_type})")
+                        continue # Added continue here
+                    elif option_match and question_type == 'multiple_choice':
+                        option_letter = option_match.group(1).upper()
+                        option_text = option_match.group(2).strip()
+                        current_options.append({'letter': option_letter, 'text': option_text})
+                        print(f"DEBUG: Matched OPTION: Letter='{option_letter}', Text='{option_text}'. current_options now: {current_options}")
+                    elif answer_match and question_type == 'multiple_choice':
+                        current_answer_letter = answer_match.group(1).upper()
+                        print(f"DEBUG: Matched ANSWER for MCQ: Letter='{current_answer_letter}'")
+                        # MCQ is saved when the next question starts or at the end of the document
+                    elif (question_type == 'essay' or question_type == 'fill_in_the_blanks') and text.lower().startswith('answer:'):
+                        current_lecturer_answer_key = text.split(':', 1)[1].strip()
+                        print(f"DEBUG: Matched Text Answer for {question_type}: '{current_lecturer_answer_key}' for Q: '{current_question_text}'")
+                        _save_parsed_question(exam, current_question_text, question_type, [], None, current_lecturer_answer_key)
+                        parsed_questions += 1
+                        current_question_text = None # Reset
+                        # Reset question_type to default or let next header/q_match decide
+                        question_type = 'multiple_choice' 
+                        is_next_question_essay = False # Reset flags
+                        is_next_question_fill_in_the_blanks = False
+                        continue
+                
+                # Save the last question after the loop finishes
+                if current_question_text:
+                    print(f"DEBUG: Saving LAST question (type: {question_type}): '{current_question_text}' Options: {current_options} Ans: {current_answer_letter}")
+                    _save_parsed_question(exam, current_question_text, question_type, current_options, current_answer_letter, current_lecturer_answer_key)
+                    parsed_questions += 1
+
+            print("--- Question Parsing Finished ---_DEBUG_EMAIL_REMOVED_") # DEBUG END
+            return JsonResponse({'message': f'Successfully parsed and saved {parsed_questions} questions for exam "{exam.title}".'}, status=201)
+
+        except Exception as e:
+            print(f"ERROR during parsing: {str(e)} traceback: {traceback.format_exc()}") # DEBUG: Print full traceback
+            return JsonResponse({'error': f'Error processing file: {str(e)}'}, status=500)
+    
+    return HttpResponseNotAllowed(['POST'])
+
+
+def _save_parsed_question(exam_obj, q_text, q_type, options_list, correct_letter, lecturer_answer_key_text):
+    if not q_text:
+        print("DEBUG_SAVE: q_text is empty, not saving question.")
+        return
+
+    print(f"DEBUG_SAVE: Creating Question: exam_id={exam_obj.id}, text='{q_text[:30]}...', type='{q_type}', answer_key='{lecturer_answer_key_text}'")
+    question = Question.objects.create(
+        exam=exam_obj,
+        question_text=q_text,
+        question_type=q_type,
+        lecturer_answer_key=lecturer_answer_key_text if lecturer_answer_key_text is not None else ""
+    )
+
+    if q_type == 'multiple_choice':
+        print(f"DEBUG_SAVE: MCQ options_list: {options_list}, correct_letter: {correct_letter}")
+        for opt_idx, opt in enumerate(options_list):
+            is_correct_option = (opt['letter'] == correct_letter)
+            print(f"DEBUG_SAVE: Creating Option {opt_idx}: text='{opt['text']}', is_correct={is_correct_option}")
+            Option.objects.create(
+                question=question,
+                option_text=opt['text'],
+                is_correct=is_correct_option
+            )
+    print(f"DEBUG_SAVE: Question {question.id} saved.")
