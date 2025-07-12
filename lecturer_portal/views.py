@@ -236,6 +236,79 @@ def upload_questions_api(request):
     return HttpResponseNotAllowed(['POST'])
 
 
+@csrf_exempt
+def update_exam_details_api(request, exam_id):
+    if not is_lecturer_authenticated(request):
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    # Ensure the exam exists and belongs to the logged-in lecturer
+    try:
+        exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
+    except Exam.DoesNotExist:
+        return JsonResponse({'error': 'Exam not found or you do not have permission to modify it.'}, status=404)
+
+    if request.method == 'POST': # Using POST for simplicity, PUT is also common for updates
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format.'}, status=400)
+
+        # Fields that a lecturer can update
+        updated_fields_count = 0
+
+        if 'title' in data:
+            exam.title = data['title']
+            updated_fields_count += 1
+        
+        if 'course_code' in data: # Should lecturers change this? Potentially risky if students use it to find exams.
+            exam.course_code = data['course_code'] # Let's allow it for now, but be mindful.
+            updated_fields_count += 1
+
+        if 'start_time' in data:
+            try:
+                # Assuming incoming time is ISO 8601 format e.g., "2025-07-15T10:00:00Z"
+                exam.start_time = timezone.datetime.fromisoformat(data['start_time'].replace('Z', '+00:00'))
+                updated_fields_count += 1
+            except ValueError:
+                return JsonResponse({'error': 'Invalid start_time format. Use ISO 8601.'}, status=400)
+        
+        if 'end_time' in data:
+            try:
+                exam.end_time = timezone.datetime.fromisoformat(data['end_time'].replace('Z', '+00:00'))
+                updated_fields_count += 1
+            except ValueError:
+                return JsonResponse({'error': 'Invalid end_time format. Use ISO 8601.'}, status=400)
+
+        if 'duration_minutes' in data:
+            try:
+                duration = int(data['duration_minutes'])
+                if duration <= 0:
+                    return JsonResponse({'error': 'Duration must be positive.'}, status=400)
+                exam.duration_minutes = duration
+                updated_fields_count += 1
+            except ValueError:
+                return JsonResponse({'error': 'Invalid duration_minutes format. Must be an integer.'}, status=400)
+        
+        if 'is_active' in data:
+            if isinstance(data['is_active'], bool):
+                exam.is_active = data['is_active']
+                updated_fields_count += 1
+            else:
+                return JsonResponse({'error': 'is_active must be a boolean (true/false).'}, status=400)
+
+        if updated_fields_count > 0:
+            # Validation: Ensure end_time is after start_time if both are present or being updated
+            if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
+                return JsonResponse({'error': 'End time must be after start time.'}, status=400)
+            
+            exam.save()
+            return JsonResponse({'message': 'Exam details updated successfully.'})
+        else:
+            return JsonResponse({'message': 'No update data provided or no changes made.'}, status=200) # Or 304 Not Modified
+
+    return HttpResponseNotAllowed(['POST']) # Or ['POST', 'PUT']
+
+
 def _save_parsed_question(exam_obj, q_text, q_type, options_list, correct_letter, lecturer_answer_key_text):
     if not q_text:
         print("DEBUG_SAVE: q_text is empty, not saving question.")
