@@ -7,6 +7,7 @@ import traceback
 
 from admin_portal.models import LecturerCode
 from .models import Exam, Question, Option
+from student_portal.models import ExamAttempt
 from django.db import transaction
 import re
 
@@ -307,6 +308,68 @@ def update_exam_details_api(request, exam_id):
             return JsonResponse({'message': 'No update data provided or no changes made.'}, status=200) # Or 304 Not Modified
 
     return HttpResponseNotAllowed(['POST']) # Or ['POST', 'PUT']
+
+
+@csrf_exempt
+def get_exam_attempts_api(request, exam_id):
+    if not is_lecturer_authenticated(request):
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    try:
+        exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
+    except Exam.DoesNotExist:
+        return JsonResponse({'error': 'Exam not found or you do not have permission to view it.'}, status=404)
+
+    if request.method == 'GET':
+        attempts = ExamAttempt.objects.filter(exam=exam).select_related('student').order_by('-start_time')
+
+        attempts_data = []
+        for attempt in attempts:
+            student_data = {
+                'name': attempt.student.name,
+                'matric_number': attempt.student.matric_number
+            }
+            attempts_data.append({
+                'attempt_id': attempt.id,
+                'student': student_data,
+                'start_time': attempt.start_time.isoformat() if attempt.start_time else None,
+                'submission_time': attempt.submission_time.isoformat() if attempt.submission_time else None,
+                'score': attempt.score,
+                'grace_login_granted': attempt.grace_login_granted,
+                'attempt_deadline': attempt.attempt_deadline.isoformat() if attempt.attempt_deadline else None,
+            })
+
+        return JsonResponse({'exam_title': exam.title, 'attempts': attempts_data})
+
+    return HttpResponseNotAllowed(['GET'])
+
+
+@csrf_exempt
+def grant_grace_login_api(request, attempt_id):
+    if not is_lecturer_authenticated(request):
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+    
+    if request.method == 'POST':
+        try:
+            # Ensure the attempt exists and that the exam it belongs to is owned by the logged-in lecturer
+            exam_attempt = ExamAttempt.objects.select_related('exam').get(
+                id=attempt_id,
+                exam__lecturer_user=request.user
+            )
+        except ExamAttempt.DoesNotExist:
+            return JsonResponse({'error': 'Exam attempt not found or you do not have permission to modify it.'}, status=404)
+
+        # Update the grace login field
+        exam_attempt.grace_login_granted = True
+        exam_attempt.save(update_fields=['grace_login_granted'])
+
+        return JsonResponse({
+            'message': 'Grace login has been successfully granted.',
+            'attempt_id': exam_attempt.id,
+            'grace_login_granted': exam_attempt.grace_login_granted
+        })
+
+    return HttpResponseNotAllowed(['POST'])
 
 
 def _save_parsed_question(exam_obj, q_text, q_type, options_list, correct_letter, lecturer_answer_key_text):
