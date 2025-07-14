@@ -21,5 +21,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Add the line below for the lecturer portal API endpoints
     path('api/lecturer/', include('lecturer_portal.urls', namespace='lecturer_portal_api')),
+    # Add lecturer portal frontend pages
+    path('lecturer/', include('lecturer_portal.page_urls', namespace='lecturer_portal')),
     # You might have other paths here
 ]

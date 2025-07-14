@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecturer Dashboard - ExamGuard</title>
+    <style>
+        /* Basic styling for layout */
+        body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
+        header { background-color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        main { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        h1, h2 { color: #333; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #exam-list ul { list-style-type: none; padding: 0; }
+        #exam-list li { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        #exam-list li:hover { background-color: #f0f0f0; }
+        #exam-details { display: none; } /* Initially hidden */
+        button { padding: 8px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .logout-btn { background-color: #dc3545; }
+        .logout-btn:hover { background-color: #c82333; }
+        form label { display: block; margin-top: 10px; }
+        form input, form textarea { width: 95%; padding: 8px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Welcome, {{ lecturer_name }}</h1>
+        <button id="logout-btn" class="logout-btn">Logout</button>
+    </header>
+
+    <main>
+        <div id="left-panel">
+            <div id="exam-list" class="card">
+                <h2>Your Exams</h2>
+                <ul id="exams-ul">
+                    {% for exam in exams %}
+                        <li data-id="{{ exam.id }}">{{ exam.title }} ({{ exam.course_code }})</li>
+                    {% empty %}
+                        <li>You have not created any exams yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div id="right-panel">
+            <div id="exam-details" class="card">
+                <h2 id="details-title">Exam Details</h2>
+                <p>Select an exam from the list to see its details and manage questions.</p>
+                <!-- Details will be populated by JavaScript -->
+            </div>
+            
+            <div id="student-attempts" class="card" style="margin-top: 20px; display: none;">
+                 <h2>Student Attempts</h2>
+                 <table id="attempts-table" style="width: 100%; text-align: left;">
+                    <thead>
+                        <tr>
+                            <th>Matric Number</th>
+                            <th>Name</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Student attempts will be populated here -->
+                    </tbody>
+                 </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // We will add the JavaScript logic to make this page dynamic in the next step.
+        // For now, this sets up the basic structure.
+
+        // Logout functionality
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            await fetch('/api/lecturer/logout/', { method: 'POST' });
+            window.location.href = '/lecturer/login/'; // Redirect to login page
+        });
+
+        // Add event listeners to exam list items
+        document.querySelectorAll('#exams-ul li').forEach(item => {
+            item.addEventListener('click', () => {
+                const examId = item.dataset.id;
+                if (examId) {
+                    alert(`You clicked on Exam ID: ${examId}. We will fetch and display details here.`);
+                    // In the next step, we'll implement fetchExamDetails(examId);
+                }
+            });
+        });
+    </script>
+
+</body>
+</html> 
