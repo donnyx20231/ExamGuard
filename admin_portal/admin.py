@@ -1,4 +1,4 @@
-from django.contrib import admin
+  from django.contrib import admin
 from .models import LecturerCode
 # from django.contrib.auth.models import User # Not strictly needed for basic registration
 # from django.contrib.auth.admin import UserAdmin as BaseUserAdmin # For more advanced User admin customization

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam</title>
+    <link rel="stylesheet" href="{% static 'css/exam.css' %}">
+</head>
+<body>
+    <div id="exam-container">
+        <div id="exam-header">
+            <h1 id="exam-title"></h1>
+            <div id="timer"></div>
+        </div>
+        <div id="questions-container"></div>
+        <button id="submit-exam">Submit Exam</button>
+    </div>
+    <div id="cheating-warning" style="display: none;">
+        <h1>X</h1>
+        <p>You have been flagged for attempting to cheat. Please return to full-screen mode immediately.</p>
+    </div>
+    <script src="{% static 'js/exam.js' %}"></script>
+</body>
+</html> 

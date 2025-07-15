@@ -51,7 +51,8 @@ class Question(models.Model):
     )
     marks = models.PositiveIntegerField(default=1)
     lecturer_answer_key = models.TextField(blank=True, null=True, help_text="Correct answer for fill-in-the-blanks or keywords/ideal answer for essays.")
-
+    case_sensitive = models.BooleanField(default=False, help_text="Check this if the fill-in-the-blanks answer requires case-sensitive matching.")
+    
     def __str__(self):
         return f"{self.get_question_type_display()}: {self.question_text[:50]}... (Exam: {self.exam.title})"
 

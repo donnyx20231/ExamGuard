@@ -23,11 +23,8 @@ class ExamAttempt(models.Model):
     score = models.IntegerField(null=True, blank=True, help_text="Total score for this attempt.")
     
     grace_login_granted = models.BooleanField(default=False, help_text="Set by lecturer to allow re-entry or late start.")
-    # last_active_time = models.DateTimeField(auto_now=True, help_text="Last time any activity was registered for this attempt.") # Useful for monitoring
-    
-    # This field will store the precise moment the student's time for this attempt will expire.
-    # It will be calculated as: student_start_time + exam.duration_minutes.
     attempt_deadline = models.DateTimeField(null=True, blank=True, help_text="Calculated deadline for this specific attempt.")
+    cheating_attempts = models.PositiveIntegerField(default=0, help_text="Number of times the student has attempted to cheat.")
 
     def __str__(self):
         return f"Attempt by {self.student.matric_number} for {self.exam.title} - Score: {self.score if self.score is not None else 'Pending'}"
