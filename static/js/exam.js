@@ -1,22 +1,39 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Exam page DOM content loaded.');
+
+    const startExamContainer = document.getElementById('start-exam-container');
+    const startExamButton = document.getElementById('start-exam-button');
+    const examContainer = document.getElementById('exam-container');
     const examTitle = document.getElementById('exam-title');
     const timerDisplay = document.getElementById('timer');
     const questionsContainer = document.getElementById('questions-container');
     const submitButton = document.getElementById('submit-exam');
     const cheatingWarning = document.getElementById('cheating-warning');
-    const courseCode = window.location.pathname.split('/')[3];
+    const warningsContainer = document.getElementById('warnings-container');
+    const agreeToWarningsButton = document.getElementById('agree-to-warnings');
+    const questionNavigation = document.getElementById('question-navigation');
+    const returnToFullScreenButton = document.getElementById('return-to-fullscreen');
+    const pathParts = window.location.pathname.split('/');
+    const courseCode = pathParts[3];
+    const attemptId = pathParts[4];
 
     let examDeadline;
+    let questions = [];
+    let currentQuestionIndex = 0;
+    let cheatingAttempts = 0;
+    let examSubmitted = false;
 
     const fetchQuestions = async () => {
+        console.log('Fetching questions...');
         try {
-            const response = await fetch(`/api/exam/${courseCode}/questions/`);
+            const response = await fetch(`/api/student/exam/${courseCode}/questions/?attempt_id=${attemptId}`);
             const data = await response.json();
 
             if (response.ok) {
                 examTitle.textContent = data.exam_title;
                 examDeadline = new Date(data.attempt_deadline);
-                displayQuestions(data.questions);
+                questions = data.questions.map(q => ({ ...q, answered: false })); // Add answered property
+                displayCurrentQuestion();
                 startTimer();
             } else {
                 alert(data.error || 'Failed to fetch exam questions.');
@@ -27,38 +44,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const displayQuestions = (questions) => {
-        questions.forEach((question, index) => {
-            const questionDiv = document.createElement('div');
-            questionDiv.classList.add('question');
-            questionDiv.innerHTML = `<p>${index + 1}. ${question.question_text}</p>`;
+    const displayCurrentQuestion = () => {
+        const question = questions[currentQuestionIndex];
+        questionsContainer.innerHTML = ''; // Clear previous question
 
-            if (question.question_type === 'multiple_choice') {
-                const optionsList = document.createElement('ul');
-                optionsList.classList.add('options');
-                question.options.forEach(option => {
-                    const optionItem = document.createElement('li');
-                    optionItem.innerHTML = `
-                        <input type="radio" name="question-${question.id}" value="${option.id}" id="option-${option.id}">
-                        <label for="option-${option.id}">${option.option_text}</label>
-                    `;
-                    optionsList.appendChild(optionItem);
-                });
-                questionDiv.appendChild(optionsList);
-            } else if (question.question_type === 'fill_in_the_blanks') {
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.name = `question-${question.id}`;
-                questionDiv.appendChild(input);
-            } else if (question.question_type === 'essay') {
-                const textarea = document.createElement('textarea');
-                textarea.name = `question-${question.id}`;
-                textarea.rows = 5;
-                questionDiv.appendChild(textarea);
+        // --- Create Question Navigation ---
+        questionNavigation.innerHTML = '';
+        questions.forEach((q, index) => {
+            const button = document.createElement('button');
+            button.textContent = index + 1;
+            button.classList.add('question-nav-button');
+            if (index === currentQuestionIndex) {
+                button.classList.add('active');
             }
-
-            questionsContainer.appendChild(questionDiv);
+            if (q.answered) {
+                button.classList.add('answered');
+            }
+            button.addEventListener('click', () => {
+                currentQuestionIndex = index;
+                displayCurrentQuestion();
+            });
+            questionNavigation.appendChild(button);
         });
+
+        const questionDiv = document.createElement('div');
+        questionDiv.classList.add('question');
+        questionDiv.innerHTML = `<p>${currentQuestionIndex + 1}. ${question.question_text}</p>`;
+
+        if (question.question_type === 'multiple_choice') {
+            const optionsList = document.createElement('ul');
+            optionsList.classList.add('options');
+            question.options.forEach(option => {
+                const optionItem = document.createElement('li');
+                optionItem.innerHTML = `
+                    <input type="radio" name="question-${question.id}" value="${option.id}" id="option-${option.id}" onchange="markAsAnswered()">
+                    <label for="option-${option.id}">${option.option_text}</label>
+                `;
+                optionsList.appendChild(optionItem);
+            });
+            questionDiv.appendChild(optionsList);
+        } else if (question.question_type === 'fill_in_the_blanks') {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = `question-${question.id}`;
+            input.oninput = markAsAnswered;
+            questionDiv.appendChild(input);
+        } else if (question.question_type === 'essay') {
+            const textarea = document.createElement('textarea');
+            textarea.name = `question-${question.id}`;
+            textarea.rows = 5;
+            textarea.oninput = markAsAnswered;
+            questionDiv.appendChild(textarea);
+        }
+
+        questionsContainer.appendChild(questionDiv);
+
+        const navigationDiv = document.createElement('div');
+        navigationDiv.classList.add('navigation');
+
+        if (currentQuestionIndex > 0) {
+            const prevButton = document.createElement('button');
+            prevButton.textContent = 'Previous';
+            prevButton.addEventListener('click', () => {
+                currentQuestionIndex--;
+                displayCurrentQuestion();
+            });
+            navigationDiv.appendChild(prevButton);
+        }
+
+        if (currentQuestionIndex < questions.length - 1) {
+            const nextButton = document.createElement('button');
+            nextButton.textContent = 'Next';
+            nextButton.addEventListener('click', () => {
+                currentQuestionIndex++;
+                displayCurrentQuestion();
+            });
+            navigationDiv.appendChild(nextButton);
+        }
+
+        questionsContainer.appendChild(navigationDiv);
+        attachBlockListenersToFields();
+    };
+
+    const markAsAnswered = () => {
+        questions[currentQuestionIndex].answered = true;
+        displayCurrentQuestion();
     };
 
     const startTimer = () => {
@@ -79,24 +149,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const submitExam = async () => {
+        if (examSubmitted) return;
+        examSubmitted = true;
+        console.log('Submitting exam...');
         const answers = [];
-        const questions = document.querySelectorAll('.question');
-        questions.forEach(question => {
-            const questionId = parseInt(question.querySelector('input, textarea').name.split('-')[1]);
-            let answer = { question_id: questionId };
-
-            if (question.querySelector('input[type="radio"]:checked')) {
-                answer.selected_option_id = parseInt(question.querySelector('input[type="radio"]:checked').value);
-            } else if (question.querySelector('input[type="text"]')) {
-                answer.answer_text = question.querySelector('input[type="text"]').value;
-            } else if (question.querySelector('textarea')) {
-                answer.answer_text = question.querySelector('textarea').value;
+        questions.forEach((question, index) => {
+            const questionElement = document.querySelector('.question');
+            if (questionElement) {
+                const questionId = question.id;
+                let answer = { question_id: questionId };
+                const inputElement = questionElement.querySelector('input, textarea');
+                if (inputElement) {
+                    if (inputElement.type === 'radio') {
+                        const checkedOption = questionElement.querySelector('input[type="radio"]:checked');
+                        if (checkedOption) {
+                            answer.selected_option_id = parseInt(checkedOption.value);
+                        }
+                    } else {
+                        if (inputElement.value.trim() !== '') {
+                            answer.answer_text = inputElement.value;
+                        }
+                    }
+                }
+                answers.push(answer);
             }
-            answers.push(answer);
         });
 
         try {
-            const response = await fetch(`/api/exam/${courseCode}/submit/`, {
+            const response = await fetch(`/api/student/exam/${courseCode}/submit/?attempt_id=${attemptId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ answers }),
@@ -128,60 +208,130 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const exitFullScreen = () => {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-        } else if (document.mozCancelFullScreen) { /* Firefox */
-            document.mozCancelFullScreen();
-        } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
-            document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) { /* IE/Edge */
-            document.msExitFullscreen();
-        }
-    };
-
     const logCheatingAttempt = async () => {
         try {
-            await fetch(`/api/exam/${courseCode}/log_cheating_attempt/`, { method: 'POST' });
+            await fetch(`/api/student/exam/${courseCode}/log_cheating_attempt/?attempt_id=${attemptId}`, { method: 'POST' });
         } catch (error) {
             console.error('Error logging cheating attempt:', error);
         }
     };
 
-    // --- Security Measures ---
+    const handleCheatingAttempt = () => {
+        cheatingAttempts++;
+        logCheatingAttempt();
+        if (cheatingAttempts >= 3) {
+            alert('You have reached the maximum number of violations. Your exam will be submitted.');
+            submitExam();
+            // Optionally, disable further input
+            document.querySelectorAll('input, textarea, button').forEach(el => {
+                if (el.id !== 'submit-exam') el.disabled = true;
+            });
+        }
+    };
 
-    // 1. Full-screen enforcement
+    // Robust copy/paste/selection blocking
+    function blockCopyPaste(e) {
+        e.preventDefault();
+        handleCheatingAttempt();
+        alert('Copying and pasting are disabled during the exam.');
+        return false;
+    }
+
+    // Block copy/paste globally
+    document.addEventListener('copy', blockCopyPaste);
+    document.addEventListener('cut', blockCopyPaste);
+    document.addEventListener('paste', blockCopyPaste);
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        handleCheatingAttempt();
+        alert('Right-click is disabled during the exam.');
+        return false;
+    });
+
+    // Block keyboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A)
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(e.key.toLowerCase())) {
+            e.preventDefault();
+            handleCheatingAttempt();
+            alert('Keyboard shortcuts for copy, paste, cut, and select all are disabled during the exam.');
+            return false;
+        }
+    });
+
+    // Also block on all input and textarea fields
+    function attachBlockListenersToFields() {
+        document.querySelectorAll('input, textarea').forEach(field => {
+            field.addEventListener('copy', blockCopyPaste);
+            field.addEventListener('cut', blockCopyPaste);
+            field.addEventListener('paste', blockCopyPaste);
+            field.addEventListener('contextmenu', blockCopyPaste);
+            field.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(e.key.toLowerCase())) {
+                    e.preventDefault();
+                    handleCheatingAttempt();
+                    alert('Keyboard shortcuts for copy, paste, cut, and select all are disabled during the exam.');
+                    return false;
+                }
+            });
+        });
+    }
+
+    // --- Event Listeners ---
+    if (agreeToWarningsButton) {
+        agreeToWarningsButton.addEventListener('click', () => {
+            if (warningsContainer) warningsContainer.style.display = 'none';
+            if (startExamContainer) startExamContainer.style.display = 'flex';
+        });
+    }
+
+    if (startExamButton) {
+        startExamButton.addEventListener('click', () => {
+            if (startExamContainer) startExamContainer.style.display = 'none';
+            if (examContainer) examContainer.style.display = 'block';
+            enterFullScreen();
+            fetchQuestions();
+        });
+    }
+
+    if (submitButton) {
+        submitButton.addEventListener('click', submitExam);
+    }
+
     document.addEventListener('fullscreenchange', () => {
         if (!document.fullscreenElement) {
-            cheatingWarning.style.display = 'flex';
-            logCheatingAttempt();
+            if (cheatingWarning) cheatingWarning.style.display = 'flex';
+            handleCheatingAttempt();
         } else {
-            cheatingWarning.style.display = 'none';
+            if (cheatingWarning) cheatingWarning.style.display = 'none';
         }
     });
     
-    // 2. Disable copy-paste
-    document.addEventListener('copy', (e) => {
-        e.preventDefault();
-        logCheatingAttempt();
-    });
-    document.addEventListener('paste', (e) => {
-        e.preventDefault();
-        logCheatingAttempt();
-    });
-
-    // 3. Detect leaving the page
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            logCheatingAttempt();
+            handleCheatingAttempt();
         }
     });
 
-    // --- Initialization ---
-    fetchQuestions();
-    submitButton.addEventListener('click', submitExam);
+    if (returnToFullScreenButton) {
+        returnToFullScreenButton.addEventListener('click', () => {
+            enterFullScreen();
+        });
+    }
+
+    // 4. Attempt to disable print screen
+    document.addEventListener('keyup', (e) => {
+        if (e.key == 'PrintScreen') {
+            navigator.clipboard.writeText('');
+            handleCheatingAttempt();
+            alert('Screenshots are not allowed during the exam.');
+        }
+    });
+    // 5. Attempt to disable screenshot on mobile
+    window.addEventListener('screenshot', () => {
+        handleCheatingAttempt();
+        alert('Screenshots are not allowed during the exam.');
+    });
     
-    // Prompt user to enter full-screen
-    alert('This exam must be taken in full-screen mode. Please click "OK" to enter full-screen.');
-    enterFullScreen();
-}); 
+    // Attach listeners initially
+    attachBlockListenersToFields();
+});

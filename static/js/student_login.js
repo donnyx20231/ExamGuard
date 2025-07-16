@@ -26,8 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (response.ok) {
-                // Redirect to the exam page
-                window.location.href = `/student/exam/${courseCode}/`;
+                // Redirect to the exam page with the attempt ID
+                window.location.href = `/student/exam/${courseCode}/${data.exam_attempt_id}/`;
             } else {
                 errorMessage.textContent = data.error || 'An unknown error occurred.';
             }

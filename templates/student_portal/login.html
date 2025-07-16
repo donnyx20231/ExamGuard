@@ -9,21 +9,24 @@
 </head>
 <body>
     <div class="login-container">
-        <h2>Student Exam Login</h2>
+        <div class="login-header">
+            <img src="{% static 'icons/graduation-cap.svg' %}" alt="ExamGuard" class="login-icon">
+            <h2>Student Exam Login</h2>
+        </div>
         <form id="login-form">
             <div class="form-group">
-                <label for="name">Full Name</label>
+                <label for="name"><img src="{% static 'icons/user.svg' %}" class="input-icon"> Full Name</label>
                 <input type="text" id="name" name="name" required>
             </div>
             <div class="form-group">
-                <label for="matric_number">Matric Number</label>
+                <label for="matric_number"><img src="{% static 'icons/id-card.svg' %}" class="input-icon"> Matric Number</label>
                 <input type="text" id="matric_number" name="matric_number" required>
             </div>
             <div class="form-group">
-                <label for="course_code">Exam Key (Course Code)</label>
+                <label for="course_code"><img src="{% static 'icons/book.svg' %}" class="input-icon"> Exam Key (Course Code)</label>
                 <input type="text" id="course_code" name="course_code" required>
             </div>
-            <button type="submit">Login</button>
+            <button type="submit"><img src="{% static 'icons/lock.svg' %}" class="button-icon"> Login</button>
             <p id="error-message" class="error-message"></p>
         </form>
     </div>

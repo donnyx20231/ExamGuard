@@ -5,9 +5,16 @@ from django.utils import timezone
 from lecturer_portal.models import Exam, Question, Option
 from .models import Student, ExamAttempt, StudentAnswer
 import json
+from urllib.parse import unquote
+import random
 
 def student_login_page(request):
     return render(request, 'student_portal/login.html')
+
+def auto_submit_exam(attempt):
+    attempt.score = 0
+    attempt.submission_time = timezone.now()
+    attempt.save()
 
 @csrf_exempt
 def student_login(request):
@@ -27,9 +34,10 @@ def student_login(request):
             except Exam.DoesNotExist:
                 return JsonResponse({'error': 'No active exam found for this course code.'}, status=404)
 
-            # Check if exam is within the valid time window
+            # Check if exam is within the valid time window (with a 5-minute grace period)
             now = timezone.now()
-            if not (exam.start_time <= now <= exam.end_time):
+            grace_period_start = exam.start_time - timezone.timedelta(minutes=5)
+            if not (grace_period_start <= now <= exam.end_time):
                 return JsonResponse({'error': 'This exam is not available at this time.'}, status=403)
 
             # Get or create student
@@ -43,13 +51,12 @@ def student_login(request):
                 student=student,
                 exam=exam,
                 defaults={
-                    'attempt_deadline': now + timezone.timedelta(minutes=exam.duration_minutes)
+                    'attempt_deadline': now + timezone.timedelta(minutes=exam.duration_minutes + 2) # Add 2 minutes
                 }
             )
 
-            if not created and not attempt.grace_login_granted:
-                # Student is trying to log in again to an existing attempt
-                if now > attempt.attempt_deadline:
+            if not created:
+                if now > attempt.exam.end_time:
                     return JsonResponse({'error': 'Your time for this exam has expired.'}, status=403)
                 if attempt.submission_time:
                     return JsonResponse({'error': 'You have already submitted this exam.'}, status=403)
@@ -77,24 +84,25 @@ def student_login(request):
 
 def fetch_exam_questions(request, course_code):
     if request.method == 'GET':
-        student_id = request.session.get('student_id')
-        exam_attempt_id = request.session.get('exam_attempt_id')
+        attempt_id = request.GET.get('attempt_id')
+        decoded_course_code = unquote(course_code)
 
-        if not student_id or not exam_attempt_id:
-            return JsonResponse({'error': 'You are not logged in.'}, status=401)
+        if not attempt_id:
+            return JsonResponse({'error': 'Missing attempt ID.'}, status=400)
 
         try:
-            attempt = ExamAttempt.objects.select_related('exam', 'student').get(id=exam_attempt_id)
+            attempt = ExamAttempt.objects.select_related('exam', 'student').get(id=attempt_id)
             
-            # Security check: ensure the course code in URL matches the exam in session
-            if attempt.exam.course_code != course_code:
+            # Security check: ensure the course code in URL matches the exam
+            if attempt.exam.course_code != decoded_course_code:
                 return JsonResponse({'error': 'Mismatch in course code.'}, status=403)
 
             # Check if deadline has passed
             if timezone.now() > attempt.attempt_deadline:
                 return JsonResponse({'error': 'Your time for this exam has expired.'}, status=403)
 
-            questions = attempt.exam.questions.all().prefetch_related('options')
+            questions = list(attempt.exam.questions.all().prefetch_related('options'))
+            random.shuffle(questions) # Shuffle the questions
             
             questions_data = []
             for q in questions:
@@ -106,7 +114,9 @@ def fetch_exam_questions(request, course_code):
                     'options': []
                 }
                 if q.question_type == 'multiple_choice':
-                    for option in q.options.all():
+                    options = list(q.options.all())
+                    random.shuffle(options) # Shuffle the options
+                    for option in options:
                         question_info['options'].append({
                             'id': option.id,
                             'option_text': option.option_text
@@ -130,16 +140,16 @@ def fetch_exam_questions(request, course_code):
 @csrf_exempt
 def submit_answers(request, course_code):
     if request.method == 'POST':
-        student_id = request.session.get('student_id')
-        exam_attempt_id = request.session.get('exam_attempt_id')
+        attempt_id = request.GET.get('attempt_id') # Get attempt_id from query params
+        decoded_course_code = unquote(course_code)
 
-        if not student_id or not exam_attempt_id:
-            return JsonResponse({'error': 'Authentication required.'}, status=401)
+        if not attempt_id:
+            return JsonResponse({'error': 'Missing attempt ID.'}, status=400)
 
         try:
-            attempt = ExamAttempt.objects.select_related('exam').get(id=exam_attempt_id, student_id=student_id)
+            attempt = ExamAttempt.objects.select_related('exam').get(id=attempt_id)
 
-            if attempt.exam.course_code != course_code:
+            if attempt.exam.course_code != decoded_course_code:
                 return JsonResponse({'error': 'Invalid course code for this attempt.'}, status=403)
 
             if attempt.submission_time:
@@ -238,16 +248,16 @@ def submit_answers(request, course_code):
 @csrf_exempt
 def log_cheating_attempt(request, course_code):
     if request.method == 'POST':
-        student_id = request.session.get('student_id')
-        exam_attempt_id = request.session.get('exam_attempt_id')
+        attempt_id = request.GET.get('attempt_id') # Get attempt_id from query params
+        decoded_course_code = unquote(course_code)
 
-        if not student_id or not exam_attempt_id:
-            return JsonResponse({'error': 'Authentication required.'}, status=401)
+        if not attempt_id:
+            return JsonResponse({'error': 'Missing attempt ID.'}, status=400)
 
         try:
-            attempt = ExamAttempt.objects.get(id=exam_attempt_id, student_id=student_id)
+            attempt = ExamAttempt.objects.get(id=attempt_id)
 
-            if attempt.exam.course_code != course_code:
+            if attempt.exam.course_code != decoded_course_code:
                 return JsonResponse({'error': 'Invalid course code for this attempt.'}, status=403)
 
             if attempt.submission_time:
@@ -258,7 +268,7 @@ def log_cheating_attempt(request, course_code):
 
             if attempt.cheating_attempts >= 3:
                 # Automatically submit the exam if the cheating limit is reached
-                submit_answers(request, course_code)
+                auto_submit_exam(attempt)
                 return JsonResponse({'error': 'You have exceeded the maximum number of cheating attempts. Your exam has been submitted.'}, status=403)
 
             return JsonResponse({'message': 'Cheating attempt logged.', 'cheating_attempts': attempt.cheating_attempts})

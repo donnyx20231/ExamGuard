@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,17 +8,35 @@
     <link rel="stylesheet" href="{% static 'css/exam.css' %}">
 </head>
 <body>
-    <div id="exam-container">
-        <div id="exam-header">
-            <h1 id="exam-title"></h1>
-            <div id="timer"></div>
+    <div id="warnings-container">
+        <h2>Exam Rules and Warnings</h2>
+        <ul>
+            <li>This exam must be taken in full-screen mode.</li>
+            <li>Copying and pasting are disabled.</li>
+            <li>Screenshots and print screen are not allowed.</li>
+            <li>Leaving the exam window will be flagged as a cheating attempt.</li>
+            <li>You will be automatically logged out after 3 cheating attempts.</li>
+        </ul>
+        <button id="agree-to-warnings">I Understand and Agree</button>
+    </div>
+    <div id="start-exam-container" style="display: none;">
+        <button id="start-exam-button">Start Exam</button>
+    </div>
+    <div id="exam-container" style="display: none;">
+        <div id="question-navigation"></div>
+        <div id="exam-content">
+            <div id="exam-header">
+                <h1 id="exam-title"></h1>
+                <div id="timer"></div>
+            </div>
+            <div id="questions-container"></div>
+            <button id="submit-exam">Submit Exam</button>
         </div>
-        <div id="questions-container"></div>
-        <button id="submit-exam">Submit Exam</button>
     </div>
     <div id="cheating-warning" style="display: none;">
         <h1>X</h1>
         <p>You have been flagged for attempting to cheat. Please return to full-screen mode immediately.</p>
+        <button id="return-to-fullscreen">Return to Full Screen</button>
     </div>
     <script src="{% static 'js/exam.js' %}"></script>
 </body>
