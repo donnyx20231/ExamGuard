@@ -8,10 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const timerDisplay = document.getElementById('timer');
     const questionsContainer = document.getElementById('questions-container');
     const submitButton = document.getElementById('submit-exam');
+    const prevButton = document.getElementById('prev-question');
+    const nextButton = document.getElementById('next-question');
     const cheatingWarning = document.getElementById('cheating-warning');
+    const questionNavigation = document.getElementById('question-navigation');
+    const violationWarning = document.getElementById('violation-warning');
+    const examProgressBar = document.getElementById('exam-progress-bar');
+    const examProgressStats = document.getElementById('exam-progress-stats');
+    const studentInfo = document.getElementById('student-info');
+    const fullscreenStatus = document.getElementById('fullscreen-status');
     const warningsContainer = document.getElementById('warnings-container');
     const agreeToWarningsButton = document.getElementById('agree-to-warnings');
-    const questionNavigation = document.getElementById('question-navigation');
     const returnToFullScreenButton = document.getElementById('return-to-fullscreen');
     const pathParts = window.location.pathname.split('/');
     const courseCode = pathParts[3];
@@ -22,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentQuestionIndex = 0;
     let cheatingAttempts = 0;
     let examSubmitted = false;
+    let studentAnswers = {}; // Store answers for all questions
 
     const fetchQuestions = async () => {
         console.log('Fetching questions...');
@@ -46,9 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const displayCurrentQuestion = () => {
         const question = questions[currentQuestionIndex];
-        questionsContainer.innerHTML = ''; // Clear previous question
+        questionsContainer.innerHTML = '';
 
-        // --- Create Question Navigation ---
+        // --- Create Question Navigation in Sidebar ---
         questionNavigation.innerHTML = '';
         questions.forEach((q, index) => {
             const button = document.createElement('button');
@@ -58,7 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.classList.add('active');
             }
             if (q.answered) {
-                button.classList.add('answered');
+                button.classList.add('answered'); // now red
+            } else {
+                button.classList.add('not-answered');
             }
             button.addEventListener('click', () => {
                 currentQuestionIndex = index;
@@ -77,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
             question.options.forEach(option => {
                 const optionItem = document.createElement('li');
                 optionItem.innerHTML = `
-                    <input type="radio" name="question-${question.id}" value="${option.id}" id="option-${option.id}" onchange="markAsAnswered()">
+                    <input type="radio" name="question-${question.id}" value="${option.id}" id="option-${option.id}">
                     <label for="option-${option.id}">${option.option_text}</label>
                 `;
                 optionsList.appendChild(optionItem);
@@ -87,48 +97,52 @@ document.addEventListener('DOMContentLoaded', () => {
             const input = document.createElement('input');
             input.type = 'text';
             input.name = `question-${question.id}`;
-            input.oninput = markAsAnswered;
             questionDiv.appendChild(input);
-        } else if (question.question_type === 'essay') {
+        } else {
             const textarea = document.createElement('textarea');
             textarea.name = `question-${question.id}`;
             textarea.rows = 5;
-            textarea.oninput = markAsAnswered;
             questionDiv.appendChild(textarea);
         }
 
+        // Restore previous answer if exists
+        if (studentAnswers[question.id]) {
+            if (question.question_type === 'multiple_choice') {
+                const selectedOption = studentAnswers[question.id].selected_option_id;
+                if (selectedOption) {
+                    const radio = questionDiv.querySelector(`input[type="radio"][value="${selectedOption}"]`);
+                    if (radio) radio.checked = true;
+                }
+            } else {
+                const input = questionDiv.querySelector('input, textarea');
+                if (input) input.value = studentAnswers[question.id].answer_text || '';
+            }
+        }
+
         questionsContainer.appendChild(questionDiv);
-
-        const navigationDiv = document.createElement('div');
-        navigationDiv.classList.add('navigation');
-
-        if (currentQuestionIndex > 0) {
-            const prevButton = document.createElement('button');
-            prevButton.textContent = 'Previous';
-            prevButton.addEventListener('click', () => {
-                currentQuestionIndex--;
-                displayCurrentQuestion();
-            });
-            navigationDiv.appendChild(prevButton);
-        }
-
-        if (currentQuestionIndex < questions.length - 1) {
-            const nextButton = document.createElement('button');
-            nextButton.textContent = 'Next';
-            nextButton.addEventListener('click', () => {
-                currentQuestionIndex++;
-                displayCurrentQuestion();
-            });
-            navigationDiv.appendChild(nextButton);
-        }
-
-        questionsContainer.appendChild(navigationDiv);
         attachBlockListenersToFields();
-    };
 
-    const markAsAnswered = () => {
-        questions[currentQuestionIndex].answered = true;
-        displayCurrentQuestion();
+        // Add event listeners to save answers
+        if (question.question_type === 'multiple_choice') {
+            questionDiv.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    studentAnswers[question.id] = { question_id: question.id, selected_option_id: parseInt(e.target.value) };
+                    questions[currentQuestionIndex].answered = true;
+                    updateProgress();
+                    displayCurrentQuestion();
+                });
+            });
+        } else {
+            const input = questionDiv.querySelector('input, textarea');
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    studentAnswers[question.id] = { question_id: question.id, answer_text: e.target.value };
+                    questions[currentQuestionIndex].answered = !!e.target.value.trim();
+                    updateProgress();
+                    displayCurrentQuestion();
+                });
+            }
+        }
     };
 
     const startTimer = () => {
@@ -152,28 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (examSubmitted) return;
         examSubmitted = true;
         console.log('Submitting exam...');
-        const answers = [];
-        questions.forEach((question, index) => {
-            const questionElement = document.querySelector('.question');
-            if (questionElement) {
-                const questionId = question.id;
-                let answer = { question_id: questionId };
-                const inputElement = questionElement.querySelector('input, textarea');
-                if (inputElement) {
-                    if (inputElement.type === 'radio') {
-                        const checkedOption = questionElement.querySelector('input[type="radio"]:checked');
-                        if (checkedOption) {
-                            answer.selected_option_id = parseInt(checkedOption.value);
-                        }
-                    } else {
-                        if (inputElement.value.trim() !== '') {
-                            answer.answer_text = inputElement.value;
-                        }
-                    }
-                }
-                answers.push(answer);
-            }
-        });
+        const answers = Object.values(studentAnswers);
+        console.log('Answers being sent:', answers);
 
         try {
             const response = await fetch(`/api/student/exam/${courseCode}/submit/?attempt_id=${attemptId}`, {
@@ -183,16 +177,22 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
+            console.log('Backend response:', data);
 
             if (response.ok) {
-                alert(`Exam submitted successfully! Your score is: ${data.final_score}`);
-                window.location.href = '/student/login/';
+                // Store result and summary in localStorage
+                localStorage.setItem('exam_score', data.final_score);
+                localStorage.setItem('exam_total', data.total_marks_possible);
+                // Prepare summary: answered/skipped for each question
+                const summary = questions.map(q => ({ answered: !!studentAnswers[q.id] && (studentAnswers[q.id].selected_option_id || (studentAnswers[q.id].answer_text && studentAnswers[q.id].answer_text.trim())) }));
+                localStorage.setItem('exam_summary', JSON.stringify(summary));
+                window.location.href = '/student/result/';
             } else {
                 alert(data.error || 'Failed to submit the exam.');
             }
         } catch (error) {
             console.error('Error submitting exam:', error);
-            alert('An error occurred while submitting the exam.');
+            alert('An error occurred while submitting the exam. Check the console for details.');
         }
     };
 
@@ -220,8 +220,11 @@ document.addEventListener('DOMContentLoaded', () => {
         cheatingAttempts++;
         logCheatingAttempt();
         if (cheatingAttempts >= 3) {
-            alert('You have reached the maximum number of violations. Your exam will be submitted.');
+            alert('You have reached the maximum number of violations. You will be logged out.');
             submitExam();
+            setTimeout(() => {
+                window.location.href = '/student/login/';
+            }, 1000);
             // Optionally, disable further input
             document.querySelectorAll('input, textarea, button').forEach(el => {
                 if (el.id !== 'submit-exam') el.disabled = true;
@@ -293,30 +296,100 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Fill in student info (example: from global context or API)
+    if (studentInfo) {
+        // Example: Replace with actual student info from backend/session
+        studentInfo.textContent = window.studentName ? `${window.studentName} | ${window.studentId}` : '';
+    }
+    // Fullscreen status
+    function updateFullscreenStatus() {
+        if (fullscreenStatus) {
+            if (document.fullscreenElement) {
+                fullscreenStatus.textContent = 'Fullscreen Active';
+                fullscreenStatus.style.color = '#388e3c';
+            } else {
+                fullscreenStatus.textContent = 'Fullscreen Inactive';
+                fullscreenStatus.style.color = '#d32f2f';
+            }
+        }
+    }
+    document.addEventListener('fullscreenchange', updateFullscreenStatus);
+    updateFullscreenStatus();
+
+    // Violation warning update
+    function setViolationWarning(remaining) {
+        if (violationWarning) {
+            violationWarning.textContent = `${remaining} violation${remaining === 1 ? '' : 's'} remaining before automatic submission.`;
+        }
+    }
+    let maxViolations = 3;
+    let currentViolations = 0;
+    setViolationWarning(maxViolations - currentViolations);
+
+    // Navigation button wiring
+    if (prevButton) {
+        prevButton.onclick = () => {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                displayCurrentQuestion();
+            }
+        };
+    }
+    if (nextButton) {
+        nextButton.onclick = () => {
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                displayCurrentQuestion();
+            }
+        };
+    }
     if (submitButton) {
-        submitButton.addEventListener('click', submitExam);
+        submitButton.onclick = submitExam;
     }
 
-    document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement) {
-            if (cheatingWarning) cheatingWarning.style.display = 'flex';
-            handleCheatingAttempt();
-        } else {
-            if (cheatingWarning) cheatingWarning.style.display = 'none';
-        }
-    });
-    
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             handleCheatingAttempt();
         }
     });
 
-    if (returnToFullScreenButton) {
-        returnToFullScreenButton.addEventListener('click', () => {
-            enterFullScreen();
-        });
+    // --- Fullscreen Enforcement ---
+    function requireFullscreen() {
+        if (!document.fullscreenElement) {
+            if (cheatingWarning) cheatingWarning.style.display = 'flex';
+        } else {
+            if (cheatingWarning) cheatingWarning.style.display = 'none';
+        }
     }
+    // Always show 'Return to Fullscreen' button when not in fullscreen
+    if (returnToFullScreenButton) {
+        returnToFullScreenButton.onclick = () => {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            } else if (document.documentElement.mozRequestFullScreen) {
+                document.documentElement.mozRequestFullScreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+                document.documentElement.webkitRequestFullscreen();
+            } else if (document.documentElement.msRequestFullscreen) {
+                document.documentElement.msRequestFullscreen();
+            }
+        };
+    }
+    document.addEventListener('fullscreenchange', () => {
+        updateFullscreenStatus();
+        requireFullscreen();
+    });
+    // On page load, require fullscreen
+    window.onload = () => {
+        requireFullscreen();
+        if (!document.fullscreenElement) {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            }
+        }
+        // Fetch questions after entering fullscreen
+        fetchQuestions();
+    };
 
     // 4. Attempt to disable print screen
     document.addEventListener('keyup', (e) => {
@@ -334,4 +407,26 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Attach listeners initially
     attachBlockListenersToFields();
+
+    // Progress bar and stats update
+    function updateProgress() {
+        if (!questions.length) return;
+        const answered = questions.filter(q => q.answered).length;
+        const total = questions.length;
+        if (examProgressBar) {
+            let percent = Math.round((answered / total) * 100);
+            examProgressBar.innerHTML = `<div class='progress' style='width:${percent}%;'></div>`;
+        }
+        if (examProgressStats) {
+            examProgressStats.textContent = `${answered} of ${total} questions answered`;
+        }
+    }
+    // Call updateProgress after each question change
+    const origDisplayCurrentQuestion = displayCurrentQuestion;
+    displayCurrentQuestion = function() {
+        origDisplayCurrentQuestion.apply(this, arguments);
+        updateProgress();
+    };
+    // Initial progress update
+    updateProgress();
 });

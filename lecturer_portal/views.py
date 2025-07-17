@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.db import transaction
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 import json
 import re
 import traceback
@@ -99,7 +99,7 @@ def _save_parsed_question(exam_obj, q_text, q_type, options_list, correct_letter
 
 @csrf_exempt
 def upload_questions_api(request):
-    """API for uploading a Word document and parsing it into questions."""
+    """API for uploading a Word document and parsing it into questions. Supports both new and existing exams."""
     if not is_lecturer_authenticated(request):
         return JsonResponse({'error': 'Authentication required.'}, status=401)
 
@@ -107,71 +107,88 @@ def upload_questions_api(request):
         return HttpResponseNotAllowed(['POST'])
 
     exam_id = request.POST.get('exam_id')
+    course_code = request.POST.get('course_code')
+    exam_title = request.POST.get('exam_title')
+    is_active = request.POST.get('is_active')
     word_file = request.FILES.get('word_file')
+    start_time = request.POST.get('start_time')
+    end_time = request.POST.get('end_time')
+    duration_minutes = request.POST.get('duration_minutes')
 
-    if not all([exam_id, word_file]):
-        return JsonResponse({'error': 'exam_id and word_file are required.'}, status=400)
+    exam = None
+    if exam_id:
+        try:
+            exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
+        except Exam.DoesNotExist:
+            return JsonResponse({'error': 'Exam not found or you do not have permission.'}, status=404)
+    else:
+        # Creating a new exam
+        if not all([course_code, exam_title, word_file, start_time, end_time, duration_minutes]):
+            return JsonResponse({'error': 'course_code, exam_title, start_time, end_time, duration_minutes, and word_file are required for new exam.'}, status=400)
+        is_active_bool = str(is_active).lower() in ['true', '1', 'yes', 'on']
+        try:
+            from django.utils.dateparse import parse_datetime
+            start_dt = parse_datetime(start_time)
+            end_dt = parse_datetime(end_time)
+            duration = int(duration_minutes)
+            if not start_dt or not end_dt or duration <= 0:
+                raise ValueError('Invalid start_time, end_time, or duration_minutes.')
+            if end_dt <= start_dt:
+                return JsonResponse({'error': 'End time must be after start time.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'Invalid date/time or duration: {e}'}, status=400)
+        exam = Exam.objects.create(
+            title=exam_title,
+            course_code=course_code,
+            is_active=is_active_bool,
+            lecturer_user=request.user,
+            start_time=start_dt,
+            end_time=end_dt,
+            duration_minutes=duration
+        )
 
-    try:
-        exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
-    except Exam.DoesNotExist:
-        return JsonResponse({'error': 'Exam not found or you do not have permission.'}, status=404)
-
-    print("--- Starting Question Parsing (Version: FINAL CORRECTED) ---")
+    # Now parse and import questions as before
     try:
         document = Document(word_file)
         parsed_questions = 0
         with transaction.atomic():
             exam.questions.all().delete()
-
             current_q_text, current_options, current_ans_letter, current_ans_key = None, [], None, None
             active_q_type = 'multiple_choice'
             header_q_type = None
-
             for idx, para in enumerate(document.paragraphs):
                 text = para.text.strip()
-                print(f"DEBUG [{idx}]: Processing: '{text}' || Active Type: {active_q_type} || Header Type: {header_q_type}")
                 if not text: continue
-
                 if text.lower() == "essay question":
                     if current_q_text: _save_parsed_question(exam, current_q_text, active_q_type, current_options, current_ans_letter, current_ans_key); parsed_questions += 1
                     current_q_text, current_options, current_ans_letter, current_ans_key = None, [], None, None
                     header_q_type = 'essay'
-                    print(f"DEBUG: Header found. Next questions will be type: '{header_q_type}'")
                     continue
                 elif text.lower() == "fill in the blanks":
                     if current_q_text: _save_parsed_question(exam, current_q_text, active_q_type, current_options, current_ans_letter, current_ans_key); parsed_questions += 1
                     current_q_text, current_options, current_ans_letter, current_ans_key = None, [], None, None
                     header_q_type = 'fill_in_the_blanks'
-                    print(f"DEBUG: Header found. Next questions will be type: '{header_q_type}'")
                     continue
-
                 answer_mcq_match = re.match(r"^Answer:\s*([A-Za-z])$", text, re.IGNORECASE)
                 answer_text_match = re.match(r"^Answer:\s*(.+)", text, re.IGNORECASE)
-
                 if current_q_text:
                     if active_q_type == 'multiple_choice' and answer_mcq_match:
                         current_ans_letter = answer_mcq_match.group(1).upper()
-                        print(f"DEBUG: Matched Answer for MCQ: '{current_ans_letter}'")
                         continue
                     elif active_q_type != 'multiple_choice' and answer_text_match:
                         current_ans_key = answer_text_match.group(1).strip()
-                        print(f"DEBUG: Matched Answer for Non-MCQ: '{current_ans_key}'")
                         _save_parsed_question(exam, current_q_text, active_q_type, [], None, current_ans_key)
                         parsed_questions += 1
                         current_q_text, current_options, current_ans_letter, current_ans_key = None, [], None, None
                         if not header_q_type: active_q_type = 'multiple_choice'
                         else: active_q_type = header_q_type
                         continue
-
                 q_match = re.match(r"^(\d+)\.\s*(.*)", text)
                 if q_match:
                     if current_q_text: 
                         _save_parsed_question(exam, current_q_text, active_q_type, current_options, current_ans_letter, current_ans_key); parsed_questions += 1
-                    
                     current_options, current_ans_letter, current_ans_key = [], None, None
                     potential_q_text = q_match.group(2).strip()
-
                     if header_q_type:
                         active_q_type = header_q_type
                         current_q_text = potential_q_text
@@ -189,25 +206,16 @@ def upload_questions_api(request):
                         else:
                             active_q_type = 'multiple_choice'
                             current_q_text = potential_q_text
-                    print(f"DEBUG: Matched Q (now type '{active_q_type}'): '{current_q_text}'")
                     continue
-
                 option_match = re.match(r"^([A-Za-z])\.\s+(.*)", text)
                 if current_q_text and active_q_type == 'multiple_choice' and option_match:
                     current_options.append({'letter': option_match.group(1).upper(), 'text': option_match.group(2).strip()})
-                    print(f"DEBUG: Matched OPTION. Options are now: {current_options}")
                     continue
-                
-                print(f"WARN: Unhandled paragraph: '{text}'")
-
             if current_q_text:
                 _save_parsed_question(exam, current_q_text, active_q_type, current_options, current_ans_letter, current_ans_key); parsed_questions += 1
-
     except Exception as e:
-        print(f"ERROR during parsing: {str(e)} traceback: {traceback.format_exc()}")
         return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
-
-    return JsonResponse({'message': f'Successfully parsed and saved {parsed_questions} questions.'}, status=201)
+    return JsonResponse({'message': f'Successfully parsed and saved {parsed_questions} questions.', 'exam_id': exam.id}, status=201)
 
 
 @csrf_exempt
@@ -268,6 +276,20 @@ def update_exam_details_api(request, exam_id):
 
 
 @csrf_exempt
+def delete_exam_api(request, exam_id):
+    if not is_lecturer_authenticated(request):
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+    if request.method != 'DELETE':
+        return HttpResponseNotAllowed(['DELETE'])
+    try:
+        exam = Exam.objects.get(id=exam_id, lecturer_user=request.user)
+    except Exam.DoesNotExist:
+        return JsonResponse({'error': 'Exam not found or you do not have permission.'}, status=404)
+    exam.delete()
+    return JsonResponse({'success': True})
+
+
+@csrf_exempt
 def get_exam_attempts_api(request, exam_id):
     if not is_lecturer_authenticated(request):
         return JsonResponse({'error': 'Authentication required.'}, status=401)
@@ -302,12 +324,12 @@ def grant_grace_login_api(request, attempt_id):
             exam_attempt = ExamAttempt.objects.select_related('exam').get(id=attempt_id, exam__lecturer_user=request.user)
         except ExamAttempt.DoesNotExist:
             return JsonResponse({'error': 'Exam attempt not found or you do not have permission to modify it.'}, status=404)
-        exam_attempt.grace_login_granted = True
-        exam_attempt.save(update_fields=['grace_login_granted'])
+        # Instead of just granting grace, delete the attempt to allow a new one
+        exam_attempt.delete()
         return JsonResponse({
-            'message': 'Grace login has been successfully granted.',
-            'attempt_id': exam_attempt.id,
-            'grace_login_granted': exam_attempt.grace_login_granted
+            'message': 'Grace login has been successfully granted. Previous attempt deleted.',
+            'attempt_id': attempt_id,
+            'grace_login_granted': True
         })
     return HttpResponseNotAllowed(['POST'])
 
@@ -360,8 +382,28 @@ def download_results_excel_api(request, exam_id):
 # --- Views for Frontend Pages --- #
 
 def lecturer_login_page(request):
-    """Renders the lecturer login page."""
-    return render(request, 'lecturer_portal/login.html')
+    """Renders the lecturer login page and handles login POST."""
+    error = None
+    if request.method == 'POST':
+        code = request.POST.get('code')
+        # Use the same logic as lecturer_code_login_api
+        from admin_portal.models import LecturerCode
+        from django.contrib.auth import login
+        from django.utils import timezone
+        try:
+            lecturer_code_obj = LecturerCode.objects.select_related('lecturer_user').get(code=code, is_active=True)
+            if lecturer_code_obj.expires_at and lecturer_code_obj.expires_at < timezone.now():
+                lecturer_code_obj.is_active = False
+                lecturer_code_obj.save()
+                error = 'Code has expired.'
+            elif not lecturer_code_obj.lecturer_user or not lecturer_code_obj.lecturer_user.is_active:
+                error = 'Associated lecturer account is not properly configured or inactive.'
+            else:
+                login(request, lecturer_code_obj.lecturer_user)
+                return redirect('/lecturer/dashboard/')
+        except LecturerCode.DoesNotExist:
+            error = 'Invalid or inactive code.'
+    return render(request, 'lecturer_portal/login.html', {'error': error})
 
 
 @login_required

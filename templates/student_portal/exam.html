@@ -8,30 +8,46 @@
     <link rel="stylesheet" href="{% static 'css/exam.css' %}">
 </head>
 <body>
-    <div id="warnings-container">
-        <h2>Exam Rules and Warnings</h2>
-        <ul>
-            <li>This exam must be taken in full-screen mode.</li>
-            <li>Copying and pasting are disabled.</li>
-            <li>Screenshots and print screen are not allowed.</li>
-            <li>Leaving the exam window will be flagged as a cheating attempt.</li>
-            <li>You will be automatically logged out after 3 cheating attempts.</li>
-        </ul>
-        <button id="agree-to-warnings">I Understand and Agree</button>
-    </div>
-    <div id="start-exam-container" style="display: none;">
-        <button id="start-exam-button">Start Exam</button>
-    </div>
-    <div id="exam-container" style="display: none;">
-        <div id="question-navigation"></div>
-        <div id="exam-content">
-            <div id="exam-header">
-                <h1 id="exam-title"></h1>
-                <div id="timer"></div>
-            </div>
-            <div id="questions-container"></div>
-            <button id="submit-exam">Submit Exam</button>
+    <div class="exam-header-bar">
+        <div class="header-left">
+            <img src="{% static 'icons/graduation-cap.svg' %}" alt="Scholar Cap" class="header-icon">
         </div>
+        <div class="header-center">
+            <span class="exam-title" id="exam-title"></span>
+        </div>
+        <div class="header-right">
+            <span class="timer-label">Time Remaining</span>
+            <span class="timer" id="timer"></span>
+            <a href="/" style="background:#1976d2;color:#fff;padding:7px 18px;border-radius:6px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(25,118,210,0.08);transition:background 0.2s;margin-top:8px;display:inline-block;">Return to Homepage</a>
+        </div>
+    </div>
+    <div class="security-banner">
+        <div class="security-icon">&#128274;</div>
+        <div class="security-text">
+            <strong>ADVANCED SECURITY MONITORING ACTIVE</strong><br>
+            <span>Real-time monitoring: Copy/paste, right-click, screenshots, screen splitting, tab switching, developer tools detection.</span><br>
+            <span class="violation-warning" id="violation-warning">3 violations remaining before automatic submission.</span>
+        </div>
+    </div>
+    <div class="exam-main-layout">
+        <div class="question-section">
+            <div id="questions-container"></div>
+            <div class="question-navigation-bar">
+                <button id="prev-question" class="nav-btn">Previous</button>
+                <button id="next-question" class="nav-btn">Next</button>
+            </div>
+        </div>
+        <aside class="sidebar">
+            <div class="sidebar-card">
+                <div id="question-navigation"></div>
+            </div>
+            <button id="submit-exam" class="submit-btn">Submit Exam</button>
+            <div class="sidebar-card">
+                <h3>Exam Progress</h3>
+                <div id="exam-progress-bar"></div>
+                <div id="exam-progress-stats"></div>
+            </div>
+        </aside>
     </div>
     <div id="cheating-warning" style="display: none;">
         <h1>X</h1>

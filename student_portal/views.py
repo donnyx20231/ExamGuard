@@ -37,8 +37,23 @@ def student_login(request):
             # Check if exam is within the valid time window (with a 5-minute grace period)
             now = timezone.now()
             grace_period_start = exam.start_time - timezone.timedelta(minutes=5)
+            print('DEBUG student_login:', {
+                'now': now,
+                'start_time': exam.start_time,
+                'end_time': exam.end_time,
+                'grace_period_start': grace_period_start,
+            })
             if not (grace_period_start <= now <= exam.end_time):
-                return JsonResponse({'error': 'This exam is not available at this time.'}, status=403)
+                # Check for grace login
+                try:
+                    student_obj = Student.objects.get(matric_number=matric_number)
+                    attempt = ExamAttempt.objects.get(student=student_obj, exam=exam)
+                    if attempt.grace_login_granted:
+                        pass  # Allow login
+                    else:
+                        return JsonResponse({'error': 'This exam is not available at this time.'}, status=403)
+                except (Student.DoesNotExist, ExamAttempt.DoesNotExist):
+                    return JsonResponse({'error': 'This exam is not available at this time.'}, status=403)
 
             # Get or create student
             student, created = Student.objects.get_or_create(

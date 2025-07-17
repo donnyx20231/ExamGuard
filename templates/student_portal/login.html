@@ -26,7 +26,10 @@
                 <label for="course_code"><img src="{% static 'icons/book.svg' %}" class="input-icon"> Exam Key (Course Code)</label>
                 <input type="text" id="course_code" name="course_code" required>
             </div>
-            <button type="submit"><img src="{% static 'icons/lock.svg' %}" class="button-icon"> Login</button>
+            <button type="submit" style="background:#1976d2;color:#fff;padding:7px 18px;border-radius:6px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(25,118,210,0.08);transition:background 0.2s;display:inline-block;border:none;outline:none;cursor:pointer;margin-top:0.5rem;">Login</button>
+            <div style="text-align:center;margin-top:1rem;">
+                <a href="/" style="background:#1976d2;color:#fff;padding:7px 18px;border-radius:6px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(25,118,210,0.08);transition:background 0.2s;display:inline-block;">Return to Homepage</a>
+            </div>
             <p id="error-message" class="error-message"></p>
         </form>
     </div>

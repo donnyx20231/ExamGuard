@@ -16,11 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import TemplateView
 
 urlpatterns = [
+    path('', TemplateView.as_view(template_name='home.html'), name='home'),
     path('admin/', admin.site.urls),
     path('api/lecturer/', include('lecturer_portal.urls', namespace='lecturer_portal_api')),
     path('lecturer/', include('lecturer_portal.page_urls', namespace='lecturer_portal')),
     path('api/student/', include('student_portal.urls', namespace='student_portal_api')),
     path('student/', include('student_portal.page_urls', namespace='student_portal_pages')),
+    path('admin_portal/', include('admin_portal.urls', namespace='admin_portal')),
 ]

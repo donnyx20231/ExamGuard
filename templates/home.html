@@ -1,0 +1,278 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to ExamGuard</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(120deg, #e3eafc 0%, #f8fafc 100%);
+            overflow-x: hidden;
+        }
+        .hero {
+            position: relative;
+            width: 100%;
+            min-height: 320px;
+            background: linear-gradient(90deg, #1976d2 0%, #42a5f5 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #fff;
+            overflow: hidden;
+        }
+        .hero-img {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            object-fit: cover;
+            box-shadow: 0 8px 32px rgba(25, 118, 210, 0.18);
+            margin-bottom: 1.2rem;
+            background: #fff;
+        }
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+        }
+        .hero-desc {
+            font-size: 1.2rem;
+            font-weight: 400;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            max-width: 600px;
+        }
+        .login-cards {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin: 2.5rem 0 1.5rem 0;
+            flex-wrap: wrap;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 4px 24px rgba(25, 118, 210, 0.10);
+            padding: 2.2rem 2.5rem 2rem 2.5rem;
+            min-width: 220px;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.25s cubic-bezier(.4,2,.6,1), box-shadow 0.25s, filter 0.25s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-card:hover, .login-card:focus {
+            transform: translateY(-10px) scale(1.06);
+            box-shadow: 0 8px 32px 0 rgba(25, 118, 210, 0.22), 0 0 16px 2px #42a5f5;
+            filter: brightness(1.07) saturate(1.1);
+        }
+        .login-card:active {
+            transform: scale(0.98);
+        }
+        .login-card::after {
+            content: '';
+            position: absolute;
+            left: -75%;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(120deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.01) 100%);
+            transform: skewX(-25deg);
+            transition: left 0.5s cubic-bezier(.4,2,.6,1);
+            pointer-events: none;
+        }
+        .login-card:hover::after {
+            left: 120%;
+            transition: left 0.7s cubic-bezier(.4,2,.6,1);
+        }
+        .login-icon {
+            width: 54px;
+            height: 54px;
+            margin-bottom: 1.2rem;
+            filter: drop-shadow(0 2px 8px #1976d2aa);
+            transition: filter 0.2s;
+        }
+        .login-card:hover .login-icon {
+            filter: drop-shadow(0 4px 16px #42a5f5cc);
+        }
+        .login-label {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1976d2;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.5px;
+        }
+        .login-link {
+            text-decoration: none;
+            color: inherit;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        /* Animated formulas */
+        .formula {
+            position: absolute;
+            font-size: 1.1rem;
+            font-weight: 600;
+            opacity: 0.18;
+            pointer-events: none;
+            animation: floatFormula 12s linear infinite;
+        }
+        .formula2 { animation-duration: 16s; left: 10%; top: 60%; }
+        .formula3 { animation-duration: 18s; left: 80%; top: 30%; }
+        .formula4 { animation-duration: 14s; left: 60%; top: 80%; }
+        .formula5 { animation-duration: 20s; left: 30%; top: 20%; }
+        @keyframes floatFormula {
+            0% { transform: translateY(0) scale(1); opacity: 0.18; }
+            50% { transform: translateY(-40px) scale(1.1); opacity: 0.28; }
+            100% { transform: translateY(0) scale(1); opacity: 0.18; }
+        }
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple-animate 0.6s linear;
+            background: rgba(66, 165, 245, 0.25);
+            pointer-events: none;
+            z-index: 2;
+        }
+        @keyframes ripple-animate {
+            to {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+        @media (max-width: 900px) {
+            .login-cards { flex-direction: column; gap: 18px; align-items: center; }
+            .login-card { min-width: 0; width: 90vw; max-width: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="hero" style="flex-direction: row; justify-content: space-between; align-items: center;">
+        <img src="{% static 'img/femaleGraduate.png' %}" alt="Female Graduate" class="hero-img hero-img-left">
+        <div class="hero-center" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="hero-title">Welcome to ExamGuard</div>
+            <div class="hero-desc">A secure, modern platform for online exams. Mathematics, Physics, Biology, Computer Science, Medicine, Arts, Music, and more—empowering every department with smart assessment tools.</div>
+            <div class="login-cards horizontal-cards">
+                <a href="/student/login/" class="login-link">
+                    <div class="login-card" tabindex="0">
+                        <span class="ripple"></span>
+                        <img src="{% static 'icons/user.svg' %}" class="login-icon" alt="Student">
+                        <div class="login-label">Student Login</div>
+                        <div>Take your exam securely</div>
+                    </div>
+                </a>
+                <a href="/lecturer/login/" class="login-link">
+                    <div class="login-card" tabindex="0">
+                        <span class="ripple"></span>
+                        <img src="{% static 'icons/graduation-cap.svg' %}" class="login-icon" alt="Lecturer">
+                        <div class="login-label">Lecturer Login</div>
+                        <div>Manage exams and results</div>
+                    </div>
+                </a>
+                <a href="/admin_portal/login/" class="login-link">
+                    <div class="login-card" tabindex="0">
+                        <span class="ripple"></span>
+                        <img src="{% static 'icons/lock.svg' %}" class="login-icon" alt="Admin">
+                        <div class="login-label">Admin Login</div>
+                        <div>Administer the platform</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        <img src="{% static 'img/maleGraduate.png' %}" alt="Male Graduate" class="hero-img hero-img-right">
+        <div class="formula" style="left: 10%; top: 20%; font-size:2.2rem; color:#fff; opacity:0.55;">E = mc²</div>
+        <div class="formula formula2" style="font-size:2.1rem; color:#fff; opacity:0.52;">∫ f(x) dx</div>
+        <div class="formula formula3" style="font-size:2.2rem; color:#fff; opacity:0.52;">F = ma</div>
+        <div class="formula formula4" style="font-size:2.1rem; color:#fff; opacity:0.52;">🧬</div>
+        <div class="formula formula5" style="font-size:2.1rem; color:#fff; opacity:0.52;">Σ (aₙ)</div>
+        <div class="formula" style="left: 10%; top: 70%; font-size:2.2rem; color:#fff; opacity:0.52;">🎵 &#119070;</div>
+        <div class="formula" style="left: 80%; top: 60%; font-size:2.2rem; color:#fff; opacity:0.52;">🎨</div>
+        <div class="formula" style="left: 60%; top: 10%; font-size:2.2rem; color:#fff; opacity:0.52;">⚗️</div>
+        <div class="formula" style="left: 80%; top: 20%; font-size:2.2rem; color:#fff; opacity:0.52;">⚖️</div>
+        <div class="formula" style="left: 30%; top: 80%; font-size:2.2rem; color:#fff; opacity:0.52;">⚙️</div>
+        <div class="formula" style="left: 50%; top: 60%; font-size:2.2rem; color:#fff; opacity:0.52;">💉</div>
+        <div class="formula" style="left: 70%; top: 80%; font-size:2.2rem; color:#fff; opacity:0.52;">📈</div>
+        <div class="formula" style="left: 40%; top: 10%; font-size:2.2rem; color:#fff; opacity:0.52;">π</div>
+        <div class="formula" style="left: 85%; top: 40%; font-size:2.2rem; color:#fff; opacity:0.52;">⚛️</div>
+        <div class="formula" style="left: 15%; top: 50%; font-size:2.2rem; color:#fff; opacity:0.52;">{ }</div>
+        <div class="formula" style="left: 60%; top: 50%; font-size:2.2rem; color:#fff; opacity:0.52;">DNA: ATCG</div>
+        <div class="formula" style="left: 25%; top: 60%; font-size:2.2rem; color:#fff; opacity:0.52;">🎤</div>
+        <div class="formula" style="left: 75%; top: 30%; font-size:2.2rem; color:#fff; opacity:0.52;">🎭</div>
+        <div class="formula" style="left: 35%; top: 25%; font-size:2.2rem; color:#fff; opacity:0.52;">∂</div>
+        <div class="formula" style="left: 55%; top: 15%; font-size:2.2rem; color:#fff; opacity:0.52;">🔬</div>
+        <div class="formula" style="left: 20%; top: 60%; font-size:2.2rem; color:#fff; opacity:0.52;">📚</div>
+        <div class="formula" style="left: 90%; top: 50%; font-size:2.2rem; color:#fff; opacity:0.52;">💻</div>
+        <div class="formula" style="left: 45%; top: 75%; font-size:2.2rem; color:#fff; opacity:0.52;">🩺</div>
+        <div class="formula" style="left: 65%; top: 35%; font-size:2.2rem; color:#fff; opacity:0.52;">🎷</div>
+        <div class="formula" style="left: 35%; top: 60%; font-size:2.2rem; color:#fff; opacity:0.52;">🖌️</div>
+        <div class="formula" style="left: 80%; top: 75%; font-size:2.2rem; color:#fff; opacity:0.52;">🧪</div>
+        <div class="formula" style="left: 15%; top: 80%; font-size:2.2rem; color:#fff; opacity:0.52;">📖</div>
+        <div class="formula" style="left: 90%; top: 20%; font-size:2.2rem; color:#fff; opacity:0.52;">🧲</div>
+        <div class="formula" style="left: 5%; top: 40%; font-size:2.2rem; color:#fff; opacity:0.52;">💡</div>
+        <div class="formula" style="left: 60%; top: 70%; font-size:2.2rem; color:#fff; opacity:0.52;">🧮</div>
+        <!-- Add more formulas or symbols as needed -->
+    </div>
+    <footer class="footer">
+        <div class="footer-divider">&gt;&gt;&gt;&gt;&gt; copyright &lt;&lt;&lt;&lt;&lt;</div>
+        <div class="footer-content">
+            <div>&copy; {{ year|default:2024 }} Choquann IT Services</div>
+            <div>Contact: <a href="https://bit.ly/3IRCHY8" target="_blank" style="color:#25D366;text-decoration:none;font-weight:600;">WhatsApp</a></div>
+        </div>
+    </footer>
+    <audio id="login-chime" src="https://cdn.pixabay.com/audio/2022/10/16/audio_12c6fae7b2.mp3" preload="auto"></audio>
+    <script>
+        // Ripple and sound effect for login cards
+        document.querySelectorAll('.login-card').forEach(card => {
+            card.addEventListener('click', function(e) {
+                // Ripple
+                const ripple = document.createElement('span');
+                ripple.className = 'ripple';
+                const rect = card.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+                ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+                card.appendChild(ripple);
+                setTimeout(() => ripple.remove(), 600);
+                // Sound
+                const audio = document.getElementById('login-chime');
+                if (audio) {
+                    audio.currentTime = 0;
+                    audio.volume = 0.18;
+                    audio.play();
+                }
+            });
+            // Keyboard accessibility: Enter/Space triggers effect
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    card.click();
+                }
+            });
+        });
+    </script>
+    <script>
+        // If you want to swap the hero image, just change the src of #hero-img
+        // document.getElementById('hero-img').src = '/static/your-image.jpg';
+    </script>
+    <script>
+        // Set year in footer if not provided
+        const footer = document.querySelector('.footer');
+        if (footer && !footer.innerHTML.includes('202')) {
+            const year = new Date().getFullYear();
+            footer.innerHTML = footer.innerHTML.replace('{{ year|default:2024 }}', year);
+        }
+    </script>
+</body>
+</html> 
