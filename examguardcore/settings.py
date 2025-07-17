@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-m&81f&5s=)lx8^8^7yujkcrcpk#gal01mkbma6k3ro(zgi4v0l
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['.onrender.com']
 
 
 # Application definition
@@ -57,7 +58,6 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'examguardcore.urls'
 
-import os # Make sure 'import os' is at the top of your settings.py if not already there, though for this specific change, BASE_DIR is enough.
 
 TEMPLATES = [
     {
@@ -126,10 +126,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# Additional locations of static files
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
